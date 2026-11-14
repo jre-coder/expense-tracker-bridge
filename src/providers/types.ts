@@ -22,7 +22,7 @@ export interface ChangedFile {
   deletions: number;
 }
 
-/** A feedback item as returned by GET /bridge/feedback. */
+/** A feedback item as returned by GET /bridge-feedback. */
 export interface FeedbackItem {
   id: string;
   text: string;

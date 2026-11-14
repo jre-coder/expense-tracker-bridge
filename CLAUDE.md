@@ -24,7 +24,7 @@ The self-hosted Bridge for Expense Tracker (`../expense-tracker/docs/decisions.m
 | `src/providers/shared.ts` | `BaseProvider`, JSON extraction, draft/match validation, header masking |
 | `src/schema.ts` | the closed Digest schema (decisions.md §6), `external_ref` hash, model-facing JSON schemas |
 | `src/redaction.ts` | the gate: `scanText`, `scanDigest`, pattern classes |
-| `src/outbound.ts` | the ONLY module that names the `/bridge/*` endpoints; idempotent retries; `describeRequest` |
+| `src/outbound.ts` | the ONLY module that names the `bridge-digests` / `bridge-feedback` / `bridge-resolutions` Edge Functions (flat names under `api_base_url`, which ends in `/functions/v1`); idempotent retries; `describeRequest` |
 | `src/held.ts` | local queue (`ready`/`held`/`approved`/`rejected`/`sent`) |
 | `src/cursor.ts` | last merged_at cursor |
 | `schema/digest.schema.json` | JSON Schema mirror of `DigestSchema`; `test/schema-json.test.ts` asserts agreement |
@@ -39,14 +39,15 @@ Tests first, then the minimum implementation, then refactor. No change lands wit
 
 1. **Closed schema.** Only the eight fields of decisions.md §6 are ever serialised. `parseDigest` strips unknown keys then validates `.strict()`; `outbound.ts` re-validates immediately before send. (`test/schema.test.ts`, `test/outbound.test.ts`, `test/guards.test.ts`)
 2. **Gate before queue, review before send.** Every free-text field is scanned by `scanDigest`; a hit makes the item `held`. `send` sends `ready` and `approved` only; approval is an explicit `review --approve` recorded in the queue. Nothing held is sent silently. (`test/redaction.test.ts`, `test/held.test.ts`, `test/cli.test.ts`)
-3. **One outbound module.** `/bridge/digests|feedback|resolutions` may appear only in `src/outbound.ts` (plus the one `--dry-run` explanatory line in `cli.ts`). `fetch(` is called only from `outbound.ts`, `github.ts`, `providers/shared.ts` and the `bin.ts` wiring. (`test/guards.test.ts`)
+3. **One outbound module.** `bridge-digests|bridge-feedback|bridge-resolutions` may appear only in `src/outbound.ts` (plus the one `--dry-run` explanatory line in `cli.ts`). `fetch(` is called only from `outbound.ts`, `github.ts`, `providers/shared.ts` and the `bin.ts` wiring. (`test/guards.test.ts`)
 4. **No telemetry, no third parties.** Every URL literal in `src/` points at `api.github.com`, `api.anthropic.com`, `api.openai.com` or `localhost`; each host is referenced only by its own module; `zod` is the only runtime dependency. (`test/guards.test.ts`)
 5. **Secrets from env only, never to disk, never to stdout.** Config holds env var names and rejects credential-shaped values. `--dry-run` and `review` print headers through `maskHeaders`. Error messages name the variable, not the value. The GitHub token never enters provider or outbound modules; the bridge key never enters providers or github. (`test/config.test.ts`, `test/guards.test.ts`, `test/providers.test.ts`)
 6. **`external_ref` is opaque.** First 16 hex chars of `sha256(repo_full_name + '#' + pr_number + merged_at)`; never a PR number or URL. (`test/schema.test.ts`)
-7. **Feedback ids are server-issued.** `addresses_feedback` and resolution matches are filtered against ids received from `GET /bridge/feedback`; anything the model invents is dropped. (`test/providers.test.ts`)
+7. **Feedback ids are server-issued.** `addresses_feedback` and resolution matches are filtered against ids received from `GET /bridge-feedback`; anything the model invents is dropped. (`test/providers.test.ts`)
 8. **`--dry-run` is the real code path minus the network call.** It prints the exact request and performs no fetch and no state write. (`test/outbound.test.ts`, `test/cli.test.ts`)
 9. **Ollama is local-only in v1.** A non-local `provider_base_url` is rejected at construction. (`test/providers.test.ts`)
 10. **Cursor never skips a failed PR.** `scan` stops at the first provider error and writes the cursor at the last success. (`test/cli.test.ts`)
+11. **One failed resolution never blocks the rest.** `resolve` posts each match independently, lists failures (e.g. `404 feedback_not_found`) at the end, and exits non-zero only if every post failed. Server error codes are printed verbatim. (`test/cli.test.ts`, `test/outbound.test.ts`)
 
 When adding a field, host, endpoint or dependency, update the matching guard test and this list in the same commit — the guard failing is the intended signal.
 

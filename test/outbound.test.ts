@@ -16,10 +16,10 @@ import { validDigest, minimalDigest } from './fixtures/digests.js';
 const api = { apiBaseUrl: 'https://api.expensetracker.example/', bridgeKey: 'brk_secret_value' };
 
 describe('request builders', () => {
-  it('POST /bridge/digests carries the bearer key, project_ref and digests, with an idempotency key derived from the body', () => {
+  it('POST /bridge-digests carries the bearer key, project_ref and digests, with an idempotency key derived from the body', () => {
     const req = buildDigestsRequest({ ...api, projectRef: 'corvago', digests: [validDigest, minimalDigest] });
     expect(req.method).toBe('POST');
-    expect(req.url).toBe('https://api.expensetracker.example/bridge/digests');
+    expect(req.url).toBe('https://api.expensetracker.example/bridge-digests');
     expect(req.headers['authorization']).toBe('Bearer brk_secret_value');
     expect(req.headers['content-type']).toBe('application/json');
     expect(req.headers['user-agent']).toMatch(/^expense-bridge\//);
@@ -42,27 +42,27 @@ describe('request builders', () => {
     expect(() => buildDigestsRequest({ ...api, projectRef: 'p', digests: many })).toThrow(/at most/i);
   });
 
-  it('GET /bridge/feedback?status=open with optional cursor', () => {
+  it('GET /bridge-feedback?status=open with optional cursor', () => {
     const req = buildFeedbackRequest({ ...api });
     expect(req.method).toBe('GET');
-    expect(req.url).toBe('https://api.expensetracker.example/bridge/feedback?status=open');
+    expect(req.url).toBe('https://api.expensetracker.example/bridge-feedback?status=open');
     expect(req.body).toBeUndefined();
-    expect(buildFeedbackRequest({ ...api, cursor: 'abc def' }).url).toBe('https://api.expensetracker.example/bridge/feedback?status=open&cursor=abc+def');
+    expect(buildFeedbackRequest({ ...api, cursor: 'abc def' }).url).toBe('https://api.expensetracker.example/bridge-feedback?status=open&cursor=abc+def');
   });
 
-  it('POST /bridge/resolutions validates the resolution shape', () => {
+  it('POST /bridge-resolutions validates the resolution shape', () => {
     const req = buildResolutionRequest({
       ...api,
       resolution: { feedback_id: 'fb_1', digest_external_ref: validDigest.external_ref, confidence: 0.9, note: 'Covered by the faded-receipt fix.' },
     });
-    expect(req.url).toBe('https://api.expensetracker.example/bridge/resolutions');
+    expect(req.url).toBe('https://api.expensetracker.example/bridge-resolutions');
     expect(JSON.parse(req.body!)).toEqual({ feedback_id: 'fb_1', digest_external_ref: validDigest.external_ref, confidence: 0.9, note: 'Covered by the faded-receipt fix.' });
     expect(() => buildResolutionRequest({ ...api, resolution: { feedback_id: 'fb_1', digest_external_ref: 'x', confidence: 0.9, note: '' } })).toThrow(/digest_external_ref/);
   });
 
   it('rejects an api base URL that is not https (except localhost for development)', () => {
     expect(() => buildFeedbackRequest({ apiBaseUrl: 'http://api.example', bridgeKey: 'k' })).toThrow(/https/);
-    expect(buildFeedbackRequest({ apiBaseUrl: 'http://localhost:54321/functions/v1', bridgeKey: 'k' }).url).toBe('http://localhost:54321/functions/v1/bridge/feedback?status=open');
+    expect(buildFeedbackRequest({ apiBaseUrl: 'http://localhost:54321/functions/v1', bridgeKey: 'k' }).url).toBe('http://localhost:54321/functions/v1/bridge-feedback?status=open');
   });
 });
 
@@ -72,7 +72,7 @@ describe('describeRequest', () => {
     const text = describeRequest(req);
     expect(text).not.toContain('brk_secret_value');
     expect(text).toContain('Bearer ****');
-    expect(text).toContain('POST https://api.expensetracker.example/bridge/digests');
+    expect(text).toContain('POST https://api.expensetracker.example/bridge-digests');
     expect(text).toContain('"external_ref": "0123456789abcdef"');
   });
   it('handles a body-less request', () => {
@@ -89,7 +89,7 @@ describe('sendRequest', () => {
     const result = await sendRequest(req(), { fetch, dryRun: true, out: (s) => out.push(s) });
     expect(result).toEqual({ dryRun: true });
     expect(calls).toHaveLength(0);
-    expect(out.join('\n')).toContain('/bridge/digests');
+    expect(out.join('\n')).toContain('/bridge-digests');
     expect(out.join('\n')).not.toContain('brk_secret_value');
   });
 
@@ -201,4 +201,32 @@ describe('sendRequest edge cases', () => {
     await defaultSleep(5);
     expect(Date.now() - started).toBeGreaterThanOrEqual(3);
   });
+});
+
+describe('server error codes are surfaced verbatim', () => {
+  const req = () => buildDigestsRequest({ ...api, projectRef: 'p', digests: [validDigest] });
+  const cases: Array<[string, number]> = [
+    ['invalid_bridge_key', 401],
+    ['project_mismatch', 403],
+    ['invalid_json', 400],
+    ['invalid_request', 400],
+    ['invalid_cursor', 400],
+    ['invalid_digest', 422],
+    ['feedback_not_found', 404],
+    ['digest_not_found', 404],
+    ['lookup_failed', 500],
+    ['method_not_allowed', 405],
+    ['payload_too_large', 413],
+  ];
+  for (const [code, status] of cases) {
+    it(`${status} ${code}`, async () => {
+      const { fetch } = mockFetch(() => jsonResponse({ error: { code, message: `detail for ${code}` } }, status));
+      const err = (await sendRequest(req(), { fetch, dryRun: false, out: () => undefined, sleep: async () => undefined, maxAttempts: 1 }).catch((e: unknown) => e)) as OutboundError;
+      expect(err).toBeInstanceOf(OutboundError);
+      expect(err.status).toBe(status);
+      expect(err.code).toBe(code);
+      expect(err.message).toContain(code);
+      expect(err.message).toContain(`detail for ${code}`);
+    });
+  }
 });

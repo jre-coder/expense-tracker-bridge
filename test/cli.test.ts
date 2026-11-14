@@ -10,7 +10,7 @@ import { BRIDGE_VERSION } from '../src/version.js';
 import { mockFetch, jsonResponse, textResponse, type Responder } from './helpers.js';
 import { validDigest, minimalDigest } from './fixtures/digests.js';
 
-const API = 'https://api.expensetracker.example';
+const API = 'https://api.expensetracker.example/functions/v1';
 const MERGED = '2026-11-13T09:30:00Z';
 
 const pull = (number: number, mergedAt: string | null = MERGED) => ({
@@ -71,14 +71,14 @@ const defaultResponder: Responder = (url, init) => {
   if (url.startsWith('https://api.github.com/repos/jre-coder/corvago/pulls?')) return jsonResponse([pull(12)]);
   if (url.includes('/pulls/12/files')) return jsonResponse(prFiles);
   if (url.startsWith('https://api.anthropic.com/')) return anthropicReply(cleanDraft);
-  if (url === `${API}/bridge/digests`) {
+  if (url === `${API}/bridge-digests`) {
     const body = JSON.parse(init.body as string) as { digests: Array<{ external_ref: string }> };
     return jsonResponse({ accepted: body.digests.map((d) => ({ external_ref: d.external_ref, digest_id: 'd_' + d.external_ref })), duplicates: [], rejected: [] });
   }
-  if (url.startsWith(`${API}/bridge/feedback`)) {
+  if (url.startsWith(`${API}/bridge-feedback`)) {
     return jsonResponse({ feedback: [{ id: 'fb_1', text: 'Old receipts never scan', severity: 'high', status: 'open', created_at: '2026-11-01T00:00:00Z' }], next_cursor: null });
   }
-  if (url === `${API}/bridge/resolutions`) return jsonResponse({ resolution_id: 'r1', feedback_id: 'fb_1', status: 'proposed' });
+  if (url === `${API}/bridge-resolutions`) return jsonResponse({ resolution: { id: 'r1' }, feedback_status: 'in_progress', created: true }, 201);
   return textResponse(`unrouted ${url}`, 500);
 };
 
@@ -377,7 +377,7 @@ describe('cli: send', () => {
     const h = await seeded();
     expect(await h.run('send', '--dry-run')).toBe(0);
     const text = h.out.join('\n');
-    expect(text).toContain(`POST ${API}/bridge/digests`);
+    expect(text).toContain(`POST ${API}/bridge-digests`);
     expect(text).toContain('"project_ref": "corvago"');
     expect(text).toContain('Bearer ****');
     expect(text).not.toContain('brk_key');
@@ -387,7 +387,7 @@ describe('cli: send', () => {
 
   it('sends ready and approved items, marks accepted and duplicate items sent, reports rejected ones', async () => {
     const h = await seeded((url, init) => {
-      if (url === `${API}/bridge/digests`) {
+      if (url === `${API}/bridge-digests`) {
         const body = JSON.parse(init.body as string) as { digests: Array<{ external_ref: string }> };
         const refs = body.digests.map((d) => d.external_ref);
         return jsonResponse({
@@ -419,7 +419,7 @@ describe('cli: send', () => {
   it('batches at 50 digests per request', async () => {
     const h = await seeded(defaultResponder, 51);
     expect(await h.run('send')).toBe(0);
-    expect(h.calls.filter((c) => c.url === `${API}/bridge/digests`)).toHaveLength(2);
+    expect(h.calls.filter((c) => c.url === `${API}/bridge-digests`)).toHaveLength(2);
   });
 
   it('surfaces an API error with its code and exits 1 without marking sent', async () => {
@@ -435,7 +435,7 @@ describe('cli: sync-feedback', () => {
     const h = harness(defaultResponder);
     await withConfig(h);
     expect(await h.run('sync-feedback', '--dry-run')).toBe(0);
-    expect(h.out.join('\n')).toContain(`GET ${API}/bridge/feedback?status=open`);
+    expect(h.out.join('\n')).toContain(`GET ${API}/bridge-feedback?status=open`);
     expect(h.calls).toHaveLength(0);
     expect(existsSync(join(h.dir, '.expense-bridge/feedback.json'))).toBe(false);
   });
@@ -468,7 +468,7 @@ describe('cli: resolve', () => {
     await withConfig(h);
     expect(await h.run('resolve')).toBe(0);
     expect(h.out.join('\n')).toMatch(/No digests/);
-    const h2 = await seeded((url, init, n) => (url.startsWith(`${API}/bridge/feedback`) ? jsonResponse({ feedback: [], next_cursor: null }) : defaultResponder(url, init, n)));
+    const h2 = await seeded((url, init, n) => (url.startsWith(`${API}/bridge-feedback`) ? jsonResponse({ feedback: [], next_cursor: null }) : defaultResponder(url, init, n)));
     expect(await h2.run('resolve')).toBe(0);
     expect(h2.out.join('\n')).toMatch(/No open feedback/);
   });
@@ -481,7 +481,7 @@ describe('cli: resolve', () => {
     const text = h.out.join('\n');
     expect(text).toContain('https://api.anthropic.com/v1/messages');
     expect(text).toContain('fb_1');
-    expect(text).toContain('/bridge/resolutions');
+    expect(text).toContain('/bridge-resolutions');
     expect(h.calls).toHaveLength(0);
   });
 
@@ -500,7 +500,7 @@ describe('cli: resolve', () => {
           { feedback_id: 'fb_3', digest_external_ref: validDigest.external_ref, confidence: 0.95, note: 'Fixed in src/services/receiptService.ts.' },
         ]);
       }
-      if (url.startsWith(`${API}/bridge/feedback`)) {
+      if (url.startsWith(`${API}/bridge-feedback`)) {
         return jsonResponse({
           feedback: ['fb_1', 'fb_2', 'fb_3'].map((id) => ({ id, text: 'something', severity: 'low', status: 'open', created_at: 'x' })),
           next_cursor: null,
@@ -509,7 +509,7 @@ describe('cli: resolve', () => {
       return defaultResponder(url, init, n);
     });
     expect(await h.run('resolve')).toBe(0);
-    const posts = h.calls.filter((c) => c.url === `${API}/bridge/resolutions`);
+    const posts = h.calls.filter((c) => c.url === `${API}/bridge-resolutions`);
     expect(posts).toHaveLength(1);
     expect((posts[0]!.body as { feedback_id: string }).feedback_id).toBe('fb_1');
     expect(h.err.join('\n')).toMatch(/fb_3/);
@@ -519,6 +519,46 @@ describe('cli: resolve', () => {
     expect(existsSync(join(h.dir, '.expense-bridge/feedback.json'))).toBe(true);
   });
 
+  it('continues past a failed resolution, reports failures at the end, exits 0 while at least one succeeded', async () => {
+    const list = ['fb_1', 'fb_2', 'fb_3'].map((id) => ({ feedback_id: id, digest_external_ref: validDigest.external_ref, confidence: 0.9, note: 'Likely covered by the faded-receipt fix.' }));
+    const h = await seeded((url, init, n) => {
+      if (url.startsWith('https://api.anthropic.com/')) return matches(list);
+      if (url.startsWith(`${API}/bridge-feedback`)) {
+        return jsonResponse({ feedback: ['fb_1', 'fb_2', 'fb_3'].map((id) => ({ id, text: 'something', severity: 'low', status: 'open', created_at: 'x' })), next_cursor: null });
+      }
+      if (url === `${API}/bridge-resolutions`) {
+        const body = init.body as string;
+        if (body.includes('fb_2')) return jsonResponse({ error: { code: 'feedback_not_found', message: 'no such feedback in this project' } }, 404);
+        if (body.includes('fb_3')) return jsonResponse({ resolution: { id: 'r3' }, feedback_status: 'in_progress', created: false }, 200);
+        return jsonResponse({ resolution: { id: 'r1' }, feedback_status: 'in_progress', created: true }, 201);
+      }
+      return defaultResponder(url, init, n);
+    });
+    expect(await h.run('resolve')).toBe(0);
+    expect(h.calls.filter((c) => c.url === `${API}/bridge-resolutions`)).toHaveLength(3);
+    const err = h.err.join('\n');
+    expect(err).toMatch(/failed resolution fb_2/);
+    expect(err).toMatch(/feedback_not_found/);
+    expect(err).not.toMatch(/fb_1|fb_3/);
+    const out = h.out.join('\n');
+    expect(out).toMatch(/resolved fb_1 .*\(0\.90\)$/m);
+    expect(out).toMatch(/resolved fb_3 .*\(already recorded\)/);
+    expect(out).toMatch(/Posted 2 resolution\(s\); 0 below confidence 0\.6; 0 skipped by the redaction gate; 1 failed\./);
+    // the failure summary comes after the per-item lines
+    expect(h.err.indexOf(h.err.find((l) => l.startsWith('failed resolution'))!)).toBe(h.err.length - 1);
+  });
+
+  it('exits 1 only when every resolution failed', async () => {
+    const h = await seeded((url, init, n) => {
+      if (url.startsWith('https://api.anthropic.com/')) return matches([{ feedback_id: 'fb_1', digest_external_ref: validDigest.external_ref, confidence: 0.9, note: 'Likely covered by the faded-receipt fix.' }]);
+      if (url === `${API}/bridge-resolutions`) return jsonResponse({ error: { code: 'digest_not_found', message: 'unknown external_ref' } }, 404);
+      return defaultResponder(url, init, n);
+    });
+    expect(await h.run('resolve')).toBe(1);
+    expect(h.err.join('\n')).toMatch(/digest_not_found/);
+    expect(h.out.join('\n')).toMatch(/Posted 0 resolution\(s\).*1 failed/);
+  });
+
   it('honours --min-confidence', async () => {
     const h = await seeded((url, init, n) =>
       url.startsWith('https://api.anthropic.com/')
@@ -526,7 +566,7 @@ describe('cli: resolve', () => {
         : defaultResponder(url, init, n),
     );
     expect(await h.run('resolve', '--min-confidence', '0.9')).toBe(0);
-    expect(h.calls.filter((c) => c.url === `${API}/bridge/resolutions`)).toHaveLength(0);
+    expect(h.calls.filter((c) => c.url === `${API}/bridge-resolutions`)).toHaveLength(0);
     expect(await h.run('resolve', '--min-confidence', 'abc')).toBe(2);
   });
 

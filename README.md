@@ -12,7 +12,7 @@ The whole repository is Apache-2.0 so you can audit exactly what leaves your mac
 npm install --global expense-bridge          # Node 20+
 cd your-repo
 expense-bridge init --repo you/your-app \
-  --api-base-url https://<your-expense-tracker-api> \
+  --api-base-url https://<project>.supabase.co/functions/v1 \
   --project-ref <project-ref-from-the-app> \
   --provider anthropic                      # or openai | ollama
 
@@ -34,7 +34,7 @@ expense-bridge send              # sends it
 |---|---|---|
 | `api.github.com` | your GitHub token (as a bearer header) | to list merged PRs, their files and diff |
 | your model provider (`api.anthropic.com`, `api.openai.com`, or `localhost:11434`) | your model key; the PR title, body, labels, changed-file list and a bounded diff; the open-feedback list | to write the digest — this is **your** key and **your** vendor relationship |
-| the Expense Tracker API host you configured | your bridge key (bearer); the **Digest** below; feedback→digest resolutions | the only thing our servers receive |
+| the Expense Tracker API host you configured (`api_base_url`, ending in `/functions/v1`) | your bridge key (bearer); the **Digest** below; feedback→digest resolutions | the only thing our servers receive — three Edge Functions: `bridge-digests`, `bridge-feedback`, `bridge-resolutions` |
 
 Never sent to the Expense Tracker API: your GitHub token, your model key, any diff, file path, file name, commit message, branch name, PR number, URL, identifier or code. The schema below is **closed**: anything not listed is dropped before send, and every string that is sent passes the redaction gate first.
 
@@ -70,9 +70,9 @@ Every string in a digest is scanned before it can be queued for sending. A hit h
 
 ## Verifying with `--dry-run`
 
-Every command accepts `--dry-run`. It prints the exact outbound request — method, URL, headers with credentials masked, and the full JSON body — then sends nothing and writes nothing. `scan --dry-run` shows the request to your model; `send --dry-run` shows the payload for `POST /bridge/digests`; `sync-feedback --dry-run` and `resolve --dry-run` show theirs. The dry-run output is the same code path as the real send, with the network call replaced by printing.
+Every command accepts `--dry-run`. It prints the exact outbound request — method, URL, headers with credentials masked, and the full JSON body — then sends nothing and writes nothing. `scan --dry-run` shows the request to your model; `send --dry-run` shows the payload for `POST <api_base_url>/bridge-digests`; `sync-feedback --dry-run` and `resolve --dry-run` show theirs. The dry-run output is the same code path as the real send, with the network call replaced by printing.
 
-Two more guards run in the test suite and fail the build if violated: only `src/outbound.ts` may name the Expense Tracker endpoints, and every URL literal in `src/` must point at `api.github.com`, `api.anthropic.com`, `api.openai.com` or `localhost`. The only runtime dependency is `zod`.
+Two more guards run in the test suite and fail the build if violated: only `src/outbound.ts` may name the Expense Tracker functions (`bridge-digests`, `bridge-feedback`, `bridge-resolutions`), and every URL literal in `src/` must point at `api.github.com`, `api.anthropic.com`, `api.openai.com` or `localhost`. The only runtime dependency is `zod`.
 
 ## Commands
 
@@ -81,9 +81,9 @@ Two more guards run in the test suite and fail the build if violated: only `src/
 | `init` | write the config (`--repo`, `--api-base-url`, `--project-ref`, `--provider`, `--model`, `--force`) |
 | `scan` | read merged PRs since the cursor (`--since`, `--limit`), ask your model, run the gate, queue results |
 | `review` | show held digests; `--approve <ref>`, `--reject <ref>`, `--json` |
-| `send` | `POST /bridge/digests` for ready and approved items, in batches of 50 |
-| `sync-feedback` | `GET /bridge/feedback?status=open` into `.expense-bridge/feedback.json` (used by `scan` so your model can reference feedback ids) |
-| `resolve` | ask your model which open feedback the digests address; `POST /bridge/resolutions` for matches at or above `--min-confidence` (default 0.6) whose note passes the gate |
+| `send` | `POST /bridge-digests` for ready and approved items, in batches of 50 |
+| `sync-feedback` | `GET /bridge-feedback?status=open` into `.expense-bridge/feedback.json` (used by `scan` so your model can reference feedback ids) |
+| `resolve` | ask your model which open feedback the digests address; `POST /bridge-resolutions` for each match at or above `--min-confidence` (default 0.6) whose note passes the gate. A rejected resolution (e.g. `feedback_not_found`) is reported at the end and does not stop the others; the exit code is non-zero only if every post failed |
 
 State lives in `.expense-bridge/` (cursor, queue, feedback cache). It is git-ignored by default and never leaves your machine.
 

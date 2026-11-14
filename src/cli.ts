@@ -390,7 +390,7 @@ async function cmdResolve(ctx: Ctx): Promise<number> {
     deps.stdout(`[dry-run] would ask ${provider.name} (${config.model}) to match ${cached.length} feedback item(s) against ${digests.length} digest(s):`);
     deps.stdout(formatDescribed(provider.describeResolutionRequest(cached, digests)));
     deps.stdout('');
-    deps.stdout(`[dry-run] each confident match would then be POSTed to ${config.api_base_url.replace(/\/+$/, '')}/bridge/resolutions as {feedback_id, digest_external_ref, confidence, note}. Nothing was sent.`);
+    deps.stdout(`[dry-run] each confident match would then be POSTed to ${config.api_base_url.replace(/\/+$/, '')}/bridge-resolutions as {feedback_id, digest_external_ref, confidence, note}. Nothing was sent.`);
     return 0;
   }
 
@@ -406,6 +406,7 @@ async function cmdResolve(ctx: Ctx): Promise<number> {
   let posted = 0;
   let weak = 0;
   let heldNotes = 0;
+  const failures: string[] = [];
   for (const match of matches) {
     if (match.confidence < minConfidence) {
       weak++;
@@ -417,13 +418,23 @@ async function cmdResolve(ctx: Ctx): Promise<number> {
       deps.stderr(`skipped resolution for ${match.feedback_id}: note tripped the redaction gate (${scan.findings.map((f) => f.class).join(', ')}). Not sent.`);
       continue;
     }
-    const req = buildResolutionRequest({ ...target, resolution: match });
-    await sendRequest(req, { fetch: deps.fetch, dryRun: false, out: deps.stdout, sleep: deps.sleep });
-    posted++;
-    deps.stdout(`  resolved ${match.feedback_id} -> ${match.digest_external_ref} (${match.confidence.toFixed(2)})`);
+    // One rejected resolution (e.g. 404 feedback_not_found) must not stop the rest.
+    try {
+      const req = buildResolutionRequest({ ...target, resolution: match });
+      const result = await sendRequest(req, { fetch: deps.fetch, dryRun: false, out: deps.stdout, sleep: deps.sleep });
+      posted++;
+      const body = (result as { body: unknown }).body as { created?: unknown } | null;
+      const repeat = body?.created === false ? ' (already recorded)' : '';
+      deps.stdout(`  resolved ${match.feedback_id} -> ${match.digest_external_ref} (${match.confidence.toFixed(2)})${repeat}`);
+    } catch (error) {
+      failures.push(`${match.feedback_id} -> ${match.digest_external_ref}: ${(error as Error).message}`);
+    }
   }
-  deps.stdout(`Posted ${posted} resolution(s); ${weak} below confidence ${minConfidence}; ${heldNotes} skipped by the redaction gate.`);
-  return 0;
+  for (const failure of failures) deps.stderr(`failed resolution ${failure}`);
+  deps.stdout(
+    `Posted ${posted} resolution(s); ${weak} below confidence ${minConfidence}; ${heldNotes} skipped by the redaction gate; ${failures.length} failed.`,
+  );
+  return failures.length > 0 && posted === 0 ? 1 : 0;
 }
 
 // ---------------------------------------------------------------- main

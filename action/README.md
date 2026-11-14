@@ -42,7 +42,10 @@ jobs:
 
 Commit `expense-bridge.config.json` (created by `expense-bridge init`) to the
 repository. It contains env var **names** only; the Bridge refuses a config
-that holds anything shaped like a credential.
+that holds anything shaped like a credential. Its `api_base_url` is the
+Expense Tracker functions root (ending in `/functions/v1`); the Bridge calls
+the `bridge-digests`, `bridge-feedback` and `bridge-resolutions` functions
+under it and nothing else.
 
 Set `dry-run: 'true'` on the first run and read the job log: it prints the
 exact request that would go to your model and the exact payload that would go

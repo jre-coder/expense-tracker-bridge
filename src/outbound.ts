@@ -1,10 +1,12 @@
 /**
  * The ONLY module that talks to the Expense Tracker API (a test greps src/ to
- * enforce it). Three endpoints, decisions.md §6:
+ * enforce it). Three Supabase Edge Functions, decisions.md §6; `api_base_url`
+ * ends in `/functions/v1` and the functions cannot serve nested paths, so the
+ * names are flat:
  *
- *   POST /bridge/digests      { project_ref, digests: Digest[] }
- *   GET  /bridge/feedback?status=open[&cursor=…]
- *   POST /bridge/resolutions  { feedback_id, digest_external_ref, confidence, note }
+ *   POST <api_base_url>/bridge-digests      { project_ref, digests: Digest[] }
+ *   GET  <api_base_url>/bridge-feedback?status=open[&cursor=…]
+ *   POST <api_base_url>/bridge-resolutions  { feedback_id, digest_external_ref, confidence, note }
  *
  * Every digest passes through the closed schema again here, so nothing
  * outside it can be serialised even if a caller forgets the earlier gate.
@@ -72,20 +74,20 @@ export function buildDigestsRequest(opts: ApiTarget & { projectRef: string; dige
     return result.digest;
   });
   const body = JSON.stringify({ project_ref: opts.projectRef, digests });
-  return { method: 'POST', url: `${baseUrl(opts.apiBaseUrl)}/bridge/digests`, headers: headers(opts, body), body };
+  return { method: 'POST', url: `${baseUrl(opts.apiBaseUrl)}/bridge-digests`, headers: headers(opts, body), body };
 }
 
 export function buildFeedbackRequest(opts: ApiTarget & { cursor?: string }): OutboundRequest {
   const params = new URLSearchParams({ status: 'open' });
   if (opts.cursor) params.set('cursor', opts.cursor);
-  return { method: 'GET', url: `${baseUrl(opts.apiBaseUrl)}/bridge/feedback?${params.toString()}`, headers: headers(opts) };
+  return { method: 'GET', url: `${baseUrl(opts.apiBaseUrl)}/bridge-feedback?${params.toString()}`, headers: headers(opts) };
 }
 
 export function buildResolutionRequest(opts: ApiTarget & { resolution: ResolutionMatch }): OutboundRequest {
   const parsed = ResolutionMatchSchema.safeParse(opts.resolution);
   if (!parsed.success) throw new Error(`Resolution failed the schema: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`);
   const body = JSON.stringify(parsed.data);
-  return { method: 'POST', url: `${baseUrl(opts.apiBaseUrl)}/bridge/resolutions`, headers: headers(opts, body), body };
+  return { method: 'POST', url: `${baseUrl(opts.apiBaseUrl)}/bridge-resolutions`, headers: headers(opts, body), body };
 }
 
 /** Exactly what would go over the wire, with the key masked. */

@@ -78,7 +78,7 @@ describe('redaction gate — code and structure', () => {
     expect(classes('see http://%zz for details')).toContain('url');
   });
   it('URLs on the configured API host pass', () => {
-    expect(classes('https://api.expensetracker.example/bridge/digests')).not.toContain('url');
+    expect(classes('https://api.expensetracker.example/bridge-digests')).not.toContain('url');
   });
   it('email addresses', () => {
     expect(classes('contact jen@noreviagroup.com')).toContain('email');

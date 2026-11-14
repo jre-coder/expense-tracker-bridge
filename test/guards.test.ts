@@ -24,11 +24,12 @@ const sources = walk(SRC).map((path) => {
 });
 
 describe('guard: only outbound.ts talks to the Expense Tracker API', () => {
-  it('the /bridge/ endpoints are named in outbound.ts only (cli.ts may print the resolutions path in --dry-run help text)', () => {
-    const offenders = sources.filter((s) => /\/bridge\/(digests|feedback|resolutions)/.test(s.code) && s.rel !== 'src/outbound.ts');
+  it('the bridge-digests|bridge-feedback|bridge-resolutions function names appear in outbound.ts only (cli.ts may print the resolutions name in --dry-run help text)', () => {
+    const ENDPOINT = /bridge-(digests|feedback|resolutions)/; // no /g: .test() with a global regex keeps lastIndex across files
+    const offenders = sources.filter((s) => ENDPOINT.test(s.code) && s.rel !== 'src/outbound.ts');
     expect(offenders.map((o) => o.rel)).toEqual(['src/cli.ts']);
     const cli = sources.find((s) => s.rel === 'src/cli.ts')!.code;
-    expect(cli.match(/\/bridge\/(digests|feedback|resolutions)/g)).toEqual(['/bridge/resolutions']);
+    expect(cli.match(new RegExp(ENDPOINT.source, 'g'))).toEqual(['bridge-resolutions']);
   });
 
   it('fetch( is called only from the modules whose job is to talk to a network host', () => {
