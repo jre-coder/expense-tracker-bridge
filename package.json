@@ -1,0 +1,44 @@
+{
+  "name": "expense-bridge",
+  "version": "0.1.0",
+  "description": "Self-hosted bridge that turns merged pull requests into functional digests for Expense Tracker without sending code, diffs, file names or tokens anywhere but your own LLM.",
+  "license": "Apache-2.0",
+  "author": "Norevia Group LLC",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "expense-bridge": "bin/expense-bridge.js"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "schema",
+    "action",
+    "README.md",
+    "LICENSE",
+    "docs"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --coverage",
+    "test:watch": "vitest",
+    "lint": "eslint src test"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.14.0",
+    "@types/node": "^20.17.6",
+    "@vitest/coverage-v8": "^2.1.4",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "eslint": "^9.14.0",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.13.0",
+    "vitest": "^2.1.4"
+  }
+}

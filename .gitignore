@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.expense-bridge/
+expense-bridge.config.json
+.env
+.env.*
+.DS_Store

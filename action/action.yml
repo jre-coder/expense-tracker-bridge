@@ -1,0 +1,66 @@
+name: 'Expense Bridge'
+description: >-
+  Turns merged pull requests into functional digests for Expense Tracker using
+  YOUR model key, runs the redaction gate, and sends only the closed-schema
+  digest. Secrets are read from this repository's own secrets and never leave
+  the Actions runner except to the hosts you configured.
+author: 'Norevia Group LLC'
+branding:
+  icon: 'shield'
+  color: 'green'
+
+inputs:
+  config:
+    description: 'Path to expense-bridge.config.json (committed, holds env var NAMES only).'
+    required: false
+    default: 'expense-bridge.config.json'
+  version:
+    description: 'expense-bridge npm version to run.'
+    required: false
+    default: 'latest'
+  dry-run:
+    description: 'When "true", print the exact outbound payloads and send nothing.'
+    required: false
+    default: 'false'
+  github-token:
+    description: 'Token that can read pull requests. Defaults to the workflow GITHUB_TOKEN (read-only is enough).'
+    required: false
+    default: ${{ github.token }}
+  bridge-key:
+    description: 'Per-project Expense Tracker bridge key (store it as a repository secret).'
+    required: true
+  provider-key:
+    description: 'Your Anthropic or OpenAI key (repository secret). Leave empty for a local Ollama runner.'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install expense-bridge
+      shell: bash
+      run: npm install --global "expense-bridge@${{ inputs.version }}"
+
+    - name: Restore the Bridge cursor
+      uses: actions/cache@v4
+      with:
+        path: .expense-bridge
+        key: expense-bridge-${{ github.repository }}-${{ github.run_id }}
+        restore-keys: |
+          expense-bridge-${{ github.repository }}-
+
+    - name: Scan merged pull requests and send digests
+      shell: bash
+      env:
+        # The names on the LEFT must match github_token_env / bridge_key_env /
+        # provider_key_env in your config. The values are repository secrets,
+        # resolved on this runner only.
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        EXPENSE_BRIDGE_KEY: ${{ inputs.bridge-key }}
+        ANTHROPIC_API_KEY: ${{ inputs.provider-key }}
+        OPENAI_API_KEY: ${{ inputs.provider-key }}
+        DRY_RUN_FLAG: ${{ inputs.dry-run == 'true' && '--dry-run' || '' }}
+      run: |
+        set -euo pipefail
+        expense-bridge scan --config "${{ inputs.config }}" $DRY_RUN_FLAG
+        expense-bridge send --config "${{ inputs.config }}" $DRY_RUN_FLAG

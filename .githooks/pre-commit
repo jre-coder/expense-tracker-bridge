@@ -1,0 +1,11 @@
+#!/bin/sh
+# Typecheck first (cheaper to read), then the suite with its coverage thresholds.
+# Activate once per clone: git config core.hooksPath .githooks
+set -e
+cd "$(git rev-parse --show-toplevel)"
+echo "Running typecheck..."
+npm run --silent typecheck || { echo "Type errors. Commit blocked. Fix tsc errors before committing."; exit 1; }
+echo "Typecheck clean."
+echo "Running tests..."
+npm test --silent || { echo "Tests failed. Commit blocked."; exit 1; }
+echo "Tests green."
