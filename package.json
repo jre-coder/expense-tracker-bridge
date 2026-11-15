@@ -2,6 +2,26 @@
   "name": "expense-bridge",
   "version": "0.1.0",
   "description": "Self-hosted bridge that turns merged pull requests into functional digests for Expense Tracker without sending code, diffs, file names or tokens anywhere but your own LLM.",
+  "keywords": [
+    "expense",
+    "receipts",
+    "github",
+    "digests",
+    "privacy",
+    "pull-requests",
+    "release-notes",
+    "redaction",
+    "cli",
+    "self-hosted"
+  ],
+  "homepage": "https://github.com/jre-coder/expense-tracker-bridge#readme",
+  "bugs": {
+    "url": "https://github.com/jre-coder/expense-tracker-bridge/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jre-coder/expense-tracker-bridge.git"
+  },
   "license": "Apache-2.0",
   "author": "Norevia Group LLC",
   "type": "module",
@@ -16,16 +36,22 @@
     "dist",
     "schema",
     "action",
+    "docs",
     "README.md",
-    "LICENSE",
-    "docs"
+    "CHANGELOG.md",
+    "SECURITY.md",
+    "LICENSE"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "npm run clean && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --coverage",
     "test:watch": "vitest",
-    "lint": "eslint src test"
+    "lint": "eslint src test",
+    "smoke:pack": "sh scripts/smoke-pack.sh",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run typecheck && npm run lint && npm test"
   },
   "dependencies": {
     "zod": "^3.23.8"

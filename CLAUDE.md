@@ -10,7 +10,7 @@ The self-hosted Bridge for Expense Tracker (`../expense-tracker/docs/decisions.m
 - Runtime dependency: `zod` only. Providers and GitHub use raw `fetch` so the wire shape is readable in one file each.
 - Vitest with v8 coverage; thresholds are 100% for statements, branches, functions and lines on `src/` (`src/bin.ts` and the type-only `src/providers/types.ts` excluded).
 - ESLint (`typescript-eslint` recommended).
-- `npm run typecheck`, `npm test`, `npm run lint`, `npm run build`; `.githooks/pre-commit` runs typecheck then tests; `.github/workflows/test.yml` runs all four.
+- `npm run typecheck`, `npm test`, `npm run lint`, `npm run build` (cleans `dist/` first); `.githooks/pre-commit` runs typecheck then tests; `.github/workflows/test.yml` runs all four plus the `smoke-pack` job (Node 20 and 22). `npm publish` runs `prepublishOnly` (typecheck, lint, test) then `prepack` (build). Release steps: `docs/release.md`.
 
 ## Key files
 
@@ -29,7 +29,11 @@ The self-hosted Bridge for Expense Tracker (`../expense-tracker/docs/decisions.m
 | `src/cursor.ts` | last merged_at cursor |
 | `schema/digest.schema.json` | JSON Schema mirror of `DigestSchema`; `test/schema-json.test.ts` asserts agreement |
 | `action/` | composite GitHub Action wrapper |
-| `docs/` | threat model, what-leaves-your-machine, roadmap |
+| `docs/` | threat model, what-leaves-your-machine, roadmap, release process (`docs/release.md`) |
+| `test/package.test.ts` | release hygiene: `files` whitelist, bin shim, `prepublishOnly`/`prepack`, metadata, the two workflows |
+| `scripts/smoke-pack.sh` | `npm run smoke:pack`: packs, installs the tarball into a temp prefix, runs `--help`/`--version`, uninstalls (CI job `smoke-pack`) |
+| `.github/workflows/publish.yml` | manual npm trusted-publishing (OIDC) workflow; fails fast until `NPM_TRUSTED_PUBLISHING=configured` (see `docs/release.md`) |
+| `SECURITY.md`, `CONTRIBUTING.md`, `CHANGELOG.md` | public-repo files; `CHANGELOG.md` gets an entry with every user-visible change |
 
 ## TDD rule (non-negotiable)
 

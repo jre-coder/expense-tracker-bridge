@@ -1,6 +1,10 @@
 # expense-bridge
 
-The self-hosted bridge between your pull requests and [Expense Tracker](https://github.com/jre-coder/expense-tracker)'s field-testing loop.
+[![npm](https://img.shields.io/npm/v/expense-bridge.svg)](https://www.npmjs.com/package/expense-bridge)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![test](https://github.com/jre-coder/expense-tracker-bridge/actions/workflows/test.yml/badge.svg)](https://github.com/jre-coder/expense-tracker-bridge/actions/workflows/test.yml)
+
+The self-hosted bridge between your pull requests and Expense Tracker's field-testing loop.
 
 It runs **in your environment** (laptop, CI, or a GitHub Action in your own repo), reads merged pull requests with **your** GitHub token, asks **your** model (Anthropic, OpenAI, or a local Ollama) to write a *Functional Digest* in plain user-facing language, runs a **redaction gate**, and sends only the closed-schema digest to the Expense Tracker API. Testers then see "what to try" without anyone outside your team ever seeing code.
 
@@ -26,7 +30,22 @@ expense-bridge send --dry-run    # prints the exact payload for the Expense Trac
 expense-bridge send              # sends it
 ```
 
-`init` writes `expense-bridge.config.json`. It contains environment-variable **names**, never values; the Bridge refuses a config that holds anything shaped like a credential. Commit it.
+`init` needs `--repo`, `--api-base-url` and `--project-ref`; `--provider` defaults to `anthropic`. It writes `expense-bridge.config.json`, which contains environment-variable **names**, never values; the Bridge refuses a config that holds anything shaped like a credential. Commit it.
+
+The three secrets are read from the environment only: `GITHUB_TOKEN` (a token that can read the repository's pull requests), `EXPENSE_BRIDGE_KEY` (the bridge key, `etb_…`) and your model key (`ANTHROPIC_API_KEY` or `OPENAI_API_KEY`; none for Ollama). Run the `--dry-run` commands first and read what they print: that is everything that would leave your machine. The full list, in plain language, is in **[docs/what-leaves-your-machine.md](docs/what-leaves-your-machine.md)**.
+
+No global install? Every command also works as `npx expense-bridge <command>` (this is the form the app shows).
+
+## Connecting from the app
+
+1. **Create a bridge key in the app.** Open the project, go to **What's new** and tap **Connect your code** (or Settings › **Projects & Bridge**), and create a key. The key is shown **once**: copy it now. The screen also shows the setup command with your project's `--api-base-url` and `--project-ref` already filled in.
+2. **Install the Bridge** on the machine or CI runner that can see your repository: `npm install --global expense-bridge` (Node 20+), or use `npx expense-bridge`.
+3. **Run `init`** in your repository with the values from the app: `expense-bridge init --repo you/your-app --api-base-url <from the app> --project-ref <from the app> --provider anthropic|openai|ollama`. Commit the resulting `expense-bridge.config.json`.
+4. **Export the secrets**: `GITHUB_TOKEN`, `EXPENSE_BRIDGE_KEY` (the key from step 1) and your model key.
+5. **Dry-run**: `expense-bridge scan --dry-run`, then `expense-bridge scan` and `expense-bridge send --dry-run`. Read what would be sent; nothing has left your machine yet.
+6. **Send**: `expense-bridge send`. Digests appear in the app's What's new for that project. From then on, each merged pull request becomes a digest the next time `scan` and `send` run — by hand, or automatically on every push to your main branch with the [GitHub Action](#github-action).
+
+A revoked key stops the Bridge at its next call (`401 invalid_bridge_key`); create a new key and update `EXPENSE_BRIDGE_KEY`.
 
 ## What leaves your machine, and what never does
 
@@ -130,7 +149,11 @@ npm run build
 git config core.hooksPath .githooks   # typecheck + tests before every commit
 ```
 
-Tests are written first. The privacy invariants are enforced by tests in `test/guards.test.ts`, not by convention; see [CLAUDE.md](CLAUDE.md) for the numbered rules and [docs/roadmap.md](docs/roadmap.md) for what comes next.
+Tests are written first. The privacy invariants are enforced by tests in `test/guards.test.ts`, not by convention; see [CLAUDE.md](CLAUDE.md) for the numbered rules and [docs/roadmap.md](docs/roadmap.md) for what comes next. `npm run smoke:pack` installs the packed tarball into a temp directory and runs the CLI (also a CI job). Contributions: [CONTRIBUTING.md](CONTRIBUTING.md). Releases: [docs/release.md](docs/release.md). Changes: [CHANGELOG.md](CHANGELOG.md).
+
+## Security
+
+Please report vulnerabilities privately; see [SECURITY.md](SECURITY.md).
 
 ## License
 

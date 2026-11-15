@@ -10,7 +10,8 @@
 - [x] Idempotent outbound with retries; `outbound.ts` is the only API caller (guard test)
 - [x] No-telemetry guard, hygiene guards, 100% coverage thresholds
 - [x] GitHub Action wrapper; README, threat model, what-leaves-your-machine
-- [ ] Publish to npm as `expense-bridge`; tag `action@v1` (waits on the product name — decisions.md open item 1)
+- [x] Release tooling (2026-11-15): package metadata, `files` whitelist pinned by `test/package.test.ts`, `prepublishOnly`/`prepack`, `scripts/smoke-pack.sh` + CI job, `SECURITY.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `docs/release.md`, manual trusted-publishing workflow (off until configured)
+- [ ] Publish 0.1.0 to npm as `expense-bridge` and tag `v0.1.0` + the Action's `v1` (Jen, from a terminal: `docs/release.md` Path A). The package name follows the product name (decisions.md open item 1); renaming after publish means a new package and deprecating this one
 - [ ] Backend `bridge-*` functions implement the contract additions listed in `docs/what-leaves-your-machine.md`
 
 ## v1.1

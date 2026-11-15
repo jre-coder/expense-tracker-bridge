@@ -32,7 +32,7 @@ content-type: application/json
 idempotency-key: 3f0c…(sha256 of this body)
 
 {
-  "project_ref": "corvago",
+  "project_ref": "6f1c2a7e-3b9d-4e5a-8c21-0d4f7a9b1e33",
   "digests": [
     {
       "change_type": "fix",
@@ -86,7 +86,7 @@ These are details the Bridge had to pin down that §6 leaves open. The backend's
 |---|---|
 | Endpoints | Flat Supabase Edge Function names under `api_base_url` (which ends in `/functions/v1`): `POST <api_base_url>/bridge-digests`, `GET <api_base_url>/bridge-feedback`, `POST <api_base_url>/bridge-resolutions`. No nested paths. |
 | Request headers | `authorization: Bearer <bridge_key>`, `accept: application/json`, `user-agent: expense-bridge/<version>`; on POST also `content-type: application/json` and `idempotency-key: <sha256 hex of the body>` (same key across retries). |
-| `POST …/bridge-digests` body | `{ project_ref: string, digests: Digest[] }`, 1–50 digests per request. `project_ref` is the project the key is scoped to; the server should reject a mismatch. |
+| `POST …/bridge-digests` body | `{ project_ref: string, digests: Digest[] }`, 1–50 digests per request. `project_ref` is the project uuid the key is scoped to (the app fills it into the setup command it shows); the server rejects a mismatch with `project_mismatch`. |
 | `POST …/bridge-digests` response | `{ accepted: [{ external_ref, digest_id }], duplicates: [external_ref], rejected: [{ external_ref, code, message }] }`. Accepted and duplicate refs are marked sent; rejected ones stay in the queue and are printed. Any other 2xx body marks the whole batch sent. |
 | `GET …/bridge-feedback` | query `status=open`, optional `cursor`. Response `{ feedback: [{ id, text, severity, status, created_at }], next_cursor: string \| null }`. The Bridge follows `next_cursor` up to 20 pages. `id` must match `^[A-Za-z0-9_-]{1,64}$` (uuids qualify). |
 | `POST …/bridge-resolutions` body | `{ feedback_id, digest_external_ref, confidence: 0..1, note: string (<= 500) }`, one resolution per request. Idempotent on `(feedback_id, digest_external_ref)`. |

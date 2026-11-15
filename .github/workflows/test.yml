@@ -21,3 +21,19 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
+  smoke-pack:
+    # Installs the real npm tarball into a temp prefix and runs the installed CLI
+    # (scripts/smoke-pack.sh). Node 20 is the engines floor; 22 is current LTS.
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+      - run: npm ci
+      - name: Pack, install, run --help and --version, uninstall
+        run: npm run smoke:pack
