@@ -34,11 +34,11 @@ expense-bridge send              # sends it
 
 The three secrets are read from the environment only: `GITHUB_TOKEN` (a token that can read the repository's pull requests), `EXPENSE_BRIDGE_KEY` (the bridge key, `etb_…`) and your model key (`ANTHROPIC_API_KEY` or `OPENAI_API_KEY`; none for Ollama). Run the `--dry-run` commands first and read what they print: that is everything that would leave your machine. The full list, in plain language, is in **[docs/what-leaves-your-machine.md](docs/what-leaves-your-machine.md)**.
 
-No global install? Every command also works as `npx expense-bridge <command>` (this is the form the app shows).
+No global install? Every command also works as `npx expense-bridge <command>` (the app shows the global-install form).
 
 ## Connecting from the app
 
-1. **Create a bridge key in the app.** Open the project, go to **What's new** and tap **Connect your code** (or Settings › **Projects & Bridge**), and create a key. The key is shown **once**: copy it now. The screen also shows the setup command with your project's `--api-base-url` and `--project-ref` already filled in.
+1. **Create a bridge key in the app.** Open the project and tap **Connect repo** (or Settings › Integrations › **Connect your code** and pick the project), then create a key in step 1 of the guide. The key is shown **once**: copy it now. The screen also shows the setup command with your project's `--api-base-url` and `--project-ref` already filled in.
 2. **Install the Bridge** on the machine or CI runner that can see your repository: `npm install --global expense-bridge` (Node 20+), or use `npx expense-bridge`.
 3. **Run `init`** in your repository with the values from the app: `expense-bridge init --repo you/your-app --api-base-url <from the app> --project-ref <from the app> --provider anthropic|openai|ollama`. Commit the resulting `expense-bridge.config.json`.
 4. **Export the secrets**: `GITHUB_TOKEN`, `EXPENSE_BRIDGE_KEY` (the key from step 1) and your model key.
